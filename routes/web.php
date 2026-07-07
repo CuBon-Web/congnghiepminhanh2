@@ -20,6 +20,205 @@ Route::get('/clear-cache', function() {
 Route::get('/crm', function () {
     return view('app');
 });
+
+Route::get('/sitemaps.xml', function () {
+    $pages = collect([
+        ['loc' => url('/'), 'changefreq' => 'daily', 'priority' => '1.0', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('allProduct'), 'changefreq' => 'daily', 'priority' => '0.9', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('videoReview'), 'changefreq' => 'weekly', 'priority' => '0.7', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('aboutUs'), 'changefreq' => 'monthly', 'priority' => '0.7', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('technology'), 'changefreq' => 'weekly', 'priority' => '0.7', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('lienHe'), 'changefreq' => 'monthly', 'priority' => '0.7', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('duanTieuBieu'), 'changefreq' => 'weekly', 'priority' => '0.8', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('fag'), 'changefreq' => 'monthly', 'priority' => '0.6', 'lastmod' => now()->toAtomString()],
+        ['loc' => route('allListBlog'), 'changefreq' => 'daily', 'priority' => '0.8', 'lastmod' => now()->toAtomString()],
+    ]);
+
+    $blogs = \App\models\blog\Blog::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($blogs as $blog) {
+        $pages->push([
+            'loc' => route('detailBlog', ['slug' => $blog->slug]),
+            'changefreq' => 'weekly',
+            'priority' => '0.7',
+            'lastmod' => optional($blog->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $projects = \App\models\Project::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($projects as $project) {
+        $pages->push([
+            'loc' => route('duanTieuBieuDetail', ['slug' => $project->slug]),
+            'changefreq' => 'monthly',
+            'priority' => '0.7',
+            'lastmod' => optional($project->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $solutions = \App\models\Solution::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($solutions as $solution) {
+        $pages->push([
+            'loc' => route('detailSolution', ['slug' => $solution->slug]),
+            'changefreq' => 'weekly',
+            'priority' => '0.8',
+            'lastmod' => optional($solution->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $serviceCates = \App\models\ServiceCate::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($serviceCates as $serviceCate) {
+        $pages->push([
+            'loc' => route('serviceList', ['slug' => $serviceCate->slug]),
+            'changefreq' => 'weekly',
+            'priority' => '0.7',
+            'lastmod' => optional($serviceCate->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $services = \App\models\Services::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->whereNotNull('cate_slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($services as $service) {
+        $pages->push([
+            'loc' => route('serviceDetail', ['danhmuc' => $service->cate_slug, 'slug' => $service->slug]),
+            'changefreq' => 'weekly',
+            'priority' => '0.7',
+            'lastmod' => optional($service->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $pageContents = \App\models\PageContent::query()
+        ->where('status', 1)
+        ->whereNotNull('slug')
+        ->orderByDesc('id')
+        ->get();
+
+    foreach ($pageContents as $pageContent) {
+        $pages->push([
+            'loc' => route('pagecontent', ['slug' => $pageContent->slug]),
+            'changefreq' => 'monthly',
+            'priority' => '0.6',
+            'lastmod' => optional($pageContent->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $products = \App\models\product\Product::query()
+        ->leftJoin('product_category as pc', 'pc.id', '=', 'products.category')
+        ->leftJoin('product_type as pt', 'pt.id', '=', 'products.type_cate')
+        ->select([
+            'products.id',
+            'products.slug',
+            'products.updated_at',
+            'products.cate_slug',
+            'products.type_slug',
+            'pc.slug as category_slug_join',
+            'pt.slug as type_slug_join',
+        ])
+        ->orderByDesc('products.id')
+        ->get();
+
+    foreach ($products as $product) {
+        $cate = trim((string) ($product->cate_slug ?: $product->category_slug_join));
+        $type = trim((string) ($product->type_slug ?: $product->type_slug_join));
+        $id = trim((string) $product->slug);
+
+        if ($cate === '' || $id === '') {
+            continue;
+        }
+
+        if ($type === '') {
+            $type = 'loai';
+        }
+
+        $pages->push([
+            'loc' => route('detailProduct', [
+                'cate' => $cate,
+                'type' => $type,
+                'id' => $id,
+            ]),
+            'changefreq' => 'weekly',
+            'priority' => '0.8',
+            'lastmod' => optional($product->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $items = $pages->unique('loc')->values();
+    $xml = view('sitemap', ['items' => $items])->render();
+
+    return response($xml, 200)->header('Content-Type', 'application/xml');
+})->name('sitemap');
+
+Route::get('/sitemap-products.xml', function () {
+    $pages = collect([]);
+
+    $products = \App\models\product\Product::query()
+        ->leftJoin('product_category as pc', 'pc.id', '=', 'products.category')
+        ->leftJoin('product_type as pt', 'pt.id', '=', 'products.type_cate')
+        ->select([
+            'products.id',
+            'products.slug',
+            'products.updated_at',
+            'products.cate_slug',
+            'products.type_slug',
+            'pc.slug as category_slug_join',
+            'pt.slug as type_slug_join',
+        ])
+        ->orderByDesc('products.id')
+        ->get();
+
+    foreach ($products as $product) {
+        $cate = trim((string) ($product->cate_slug ?: $product->category_slug_join));
+        $type = trim((string) ($product->type_slug ?: $product->type_slug_join));
+        $id = trim((string) $product->slug);
+
+        if ($cate === '' || $id === '') {
+            continue;
+        }
+
+        if ($type === '') {
+            $type = 'loai';
+        }
+
+        $pages->push([
+            'loc' => route('detailProduct', [
+                'cate' => $cate,
+                'type' => $type,
+                'id' => $id,
+            ]),
+            'changefreq' => 'weekly',
+            'priority' => '0.8',
+            'lastmod' => optional($product->updated_at)->toAtomString() ?? now()->toAtomString(),
+        ]);
+    }
+
+    $items = $pages->unique('loc')->values();
+    $xml = view('sitemap', ['items' => $items])->render();
+
+    return response($xml, 200)->header('Content-Type', 'application/xml');
+})->name('sitemapProducts');
 // Route::get('/admin', function () {
 //     dd(1);
 //     return view('app');
